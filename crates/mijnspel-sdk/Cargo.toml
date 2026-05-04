@@ -1,0 +1,39 @@
+[package]
+name = "mijnspel-sdk"
+version = "0.1.0"
+edition = "2021"
+description = "Mijnspel backend SDK consumed by per-game WASM modules and by the host loader."
+license = "MIT"
+repository = "https://github.com/xafron-bv/mijnspel-sdk"
+readme = "README.md"
+keywords = ["mijnspel", "wasm", "game", "backend"]
+categories = ["wasm", "game-development"]
+
+[lib]
+path = "src/lib.rs"
+
+[features]
+default = []
+host = [
+    "dep:wasmtime",
+    "dep:tokio",
+    "dep:aws-config",
+    "dep:aws-sdk-s3",
+    "dep:async-trait",
+]
+
+[dependencies]
+serde = { version = "1", features = ["derive"] }
+serde_json = "1"
+sha2 = "0.10"
+hex = "0.4"
+
+wasmtime = { version = "24", optional = true, default-features = false, features = ["runtime", "cranelift", "cache", "gc"] }
+tokio = { version = "1", optional = true, features = ["sync", "fs"] }
+aws-config = { version = "1", optional = true }
+aws-sdk-s3 = { version = "1", optional = true }
+async-trait = { version = "0.1", optional = true }
+
+[dev-dependencies]
+tokio = { version = "1", features = ["macros", "rt-multi-thread"] }
+async-trait = "0.1"
