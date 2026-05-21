@@ -23,7 +23,7 @@ reproducible:
 
 ```toml
 [dependencies]
-mijnspel-sdk = { git = "https://github.com/xafron-bv/mijnspel-sdk", tag = "v0.1.0" }
+mijnspel-sdk = { git = "https://github.com/xafron-bv/mijnspel-sdk", tag = "v0.2.0" }
 ```
 
 Then use it the usual way:
