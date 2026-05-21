@@ -20,6 +20,8 @@ Pure validator. Decide whether the requested initial state is legal
 for your game. Return `Ok` or `Reject { message }`. The host turns
 `Reject` into `400` with the message you provide.
 
+Input is `{ appId, gameId, state }`.
+
 ```rust
 pub fn validate_create_request(input: serde_json::Value) -> ValidateOutcome {
     let state = input.get("state").cloned().unwrap_or_default();
@@ -35,16 +37,17 @@ pub fn validate_create_request(input: serde_json::Value) -> ValidateOutcome {
 **Called from:** `PUT /games/{id}?appId=<id>` and the autostart
 promotion path.
 
-Same shape as create, but with both the current row and the request
-in scope. Use it to enforce the per-game rules you'd normally guard at
-the boundary (turn order, move legality, content sanity).
+Input is `{ appId, gameId, priorState, state }`. Use it to enforce the
+per-game rules you'd normally guard at the boundary (turn order, move
+legality, content sanity).
 
 ## `validate_lobby_create`
 
 **Called from:** `POST /lobbies?appId=<id>`.
 
-Decide whether the proposed members and opaque `payload` are legal for
-your game. Return `Reject` to fail the lobby creation.
+Input is `{ appId, lobbyId, ownerSub, members, payload }`. Decide
+whether the proposed members and opaque `payload` are legal for your
+game. Return `Reject` to fail the lobby creation.
 
 ## `lobby_policy`
 
@@ -75,6 +78,8 @@ A 1-on-1 invite UX is reproduced by `LobbyPolicy { 2, 2, true, false }`.
 Return the initial in-state JSON for a fresh game. The host stores
 this verbatim under `state` on the row.
 
+Input is `{ appId, gameId, state }`.
+
 ```rust
 pub fn create_initial_state(input: serde_json::Value) -> serde_json::Value {
     serde_json::json!({
@@ -93,11 +98,11 @@ for on-read coercion later.
 **Called from:** the autostart path during the final join on a lobby
 where `auto_start_when_full = true`.
 
-Receives the full lobby (`members`, `ownerSub`, `payload`, …). Returns
-the initial game state for the new game atomically created from the
-lobby. Optional row-extension fields (e.g., a list of player ids to
-write as a separate index) can be lifted from the result by host
-convention — see the SDK's `state_for_lobby_start` JSON schema.
+Input is `{ appId, gameId, lobbyId, ownerSub, members, payload }`.
+Return the initial game state for the new game atomically created from
+the lobby. Optional row-extension fields can be lifted from the result
+by host convention. The generated schema is in
+`docs/api/wasm-abi.schema.json`.
 
 ## `prior_stat_ids`
 
@@ -135,7 +140,8 @@ pub fn players_in_row(row: serde_json::Value) -> PlayersInRow {
 
 **Called from:** `PUT /games/{id}?appId=<id>`.
 
-The main dispatch. Given the current row, the request, and the
+The main dispatch. Input is `{ appId, gameId, priorState, state, row,
+priors }`. Given the current row, the requested next state, and the
 fetched `priors[player][statId]`, compute the next state and any stat
 writes. Return:
 
@@ -180,8 +186,8 @@ player's value for that stat changes.
 
 If your game needs a per-session signal channel — pings, "knock",
 "undo request", "pause" — export `process_signal`. The host validates
-the JWT and the appId/game scope, then hands you the row, the signal
-request, and the caller's claims. Return:
+the JWT and the appId/game scope, then calls you with `{ appId, gameId,
+state, signalType, callerSub, payload, row, nowMs }`. Return:
 
 ```rust
 SignalOutcome::Ok {

@@ -95,15 +95,15 @@ Bearer <id_token>` header from a Cognito sign-in flow.
 | `POST /games/{id}/signal` | Per-session signal. **404** if your runtime does not export `process_signal`. |
 | `POST /lobbies` | Create a lobby. Runs `validate_lobby_create` and stamps `lobby_policy()` on the row. |
 | `POST /lobbies/{id}/join` | Join. May trigger autostart if `auto_start_when_full = true`. |
-| `POST /lobbies/by-hash/{hash}/join` | Resolve a lobby by short hash and join. |
+| `POST /lobbies/by-hash/join` | Resolve a lobby by short hash from body `{ hashKey }` or `{ hash }` and join. |
 | `DELETE /lobbies/{id}` | Cancel (owner only). |
 | `POST /lobbies/{id}/leave` | Leave (non-owner). |
-| `GET /lobbies?member=me` | List lobbies you're a member of. |
-| `GET /lobbies?owner=me` | List lobbies you own. |
-| `GET /stats?...` | Read player-stats values. |
-| `GET /leaderboard/{statId}` | Read leaderboard for a stat. |
-| `POST /push/subscribe` | Register a WebPush subscription. |
-| `POST /push/unsubscribe` | Unregister. |
+| `GET /lobbies` | List lobbies you're a member of. |
+| `GET /lobbies/owned` | List lobbies you own. |
+| `GET /users/{id}/stats` | Read player-stats values. |
+| `GET /leaderboard?stat=...` | Read leaderboard for a stat. |
+| `POST /push-subscriptions` | Register a WebPush subscription. |
+| `DELETE /push-subscriptions` | Unregister. |
 
 ## WebSocket surface
 
@@ -145,7 +145,7 @@ pub fn validate_create_request(_in: serde_json::Value) -> ValidateOutcome {
 }
 
 pub fn validate_update_request(input: serde_json::Value) -> ValidateOutcome {
-    // pure check on `input["current"]` and `input["request"]`
+    // pure check on `input["priorState"]` and `input["state"]`
     ValidateOutcome::ok()
 }
 
@@ -157,7 +157,7 @@ pub fn create_initial_state(input: serde_json::Value) -> serde_json::Value {
 }
 
 pub fn process_update(input: serde_json::Value) -> ProcessUpdateOutput {
-    // input has: current, request, priors, claims
+    // input has: appId, gameId, priorState, state, row, priors
     let next_state = compute_next(&input);
     let stat_updates = vec![]; // optional StatUpdates
     ProcessUpdateOutput { next_state, stat_updates }

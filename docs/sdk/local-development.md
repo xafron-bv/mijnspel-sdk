@@ -6,9 +6,19 @@ sidebar_position: 8
 # Local development
 
 You develop and test your WASM against the published Docker image
-`ghcr.io/xafron-bv/mijnspel-dev-server:latest`. The image bundles
+`ghcr.io/xafron-bv/mijnspel-dev-server`. The image bundles
 the full host (an AWS-API emulator plus the host binaries) and
 boots offline with no AWS credentials.
+
+The image is published per-environment, so you can pin to whichever
+release line you're targeting:
+
+| Tag | What it tracks |
+|---|---|
+| `:prd` (alias `:latest`) | The host code currently deployed in production. Default for stability. |
+| `:acc` | Whatever just merged to `acc` — the next thing on the way to production. |
+| `:dev` | Latest dev-line build (published manually by host operators). |
+| `:<version>` | Immutable per-release pin (e.g. `:6`). |
 
 ## One-shot run
 

@@ -55,17 +55,17 @@ Names are constants on `mijnspel_sdk::abi::runtime_exports`:
 
 | Export | Input | Output |
 |---|---|---|
-| `validate_create_request` | `{ state, claims }` | `ValidateOutcome` |
-| `validate_update_request` | `{ current, request, claims }` | `ValidateOutcome` |
-| `validate_lobby_create` | `{ payload, members, claims }` | `ValidateOutcome` |
+| `validate_create_request` | `{ appId, gameId, state }` | `ValidateOutcome` |
+| `validate_update_request` | `{ appId, gameId, priorState, state }` | `ValidateOutcome` |
+| `validate_lobby_create` | `{ appId, lobbyId, ownerSub, members, payload }` | `ValidateOutcome` |
 | `lobby_policy` | `{}` | `LobbyPolicy` |
-| `create_initial_state` | `{ state, claims }` | inner state JSON |
-| `state_for_lobby_start` | `{ lobby }` | inner state JSON (plus optional row-extension fields the host lifts) |
+| `create_initial_state` | `{ appId, gameId, state }` | inner state JSON |
+| `state_for_lobby_start` | `{ appId, gameId, lobbyId, ownerSub, members, payload }` | inner state JSON (plus optional row-extension fields the host lifts) |
 | `prior_stat_ids` | `{}` | `PriorStatIds` |
 | `players_in_row` | `{ row }` | `PlayersInRow` |
-| `process_update` | `{ current, request, priors, claims }` | `ProcessUpdateOutput` |
+| `process_update` | `{ appId, gameId, priorState, state, row, priors }` | `ProcessUpdateOutput` |
 | `leaderboard_stat_ids` | `{}` | `LeaderboardStatIds` |
-| `process_signal` *(optional)* | `{ row, signal, claims }` | `SignalOutcome` |
+| `process_signal` *(optional)* | `{ appId, gameId, state, signalType, callerSub, payload, row, nowMs }` | `SignalOutcome` |
 
 When the host sees no `process_signal` export, the corresponding
 `POST /games/{id}/signal` route returns 404 for that appId.
@@ -74,8 +74,8 @@ When the host sees no `process_signal` export, the corresponding
 
 | Export | Input | Output |
 |---|---|---|
-| `upgrade_from_previous` | `{ targetVersion, state }` | new state at `targetVersion` |
-| `downgrade_to_previous` | `{ targetVersion, state }` | new state at `targetVersion` |
+| `upgrade_from_previous` | `{ version, state }` | new state at `version` |
+| `downgrade_to_previous` | `{ version, state }` | new state at `version - 1` |
 
 The host chains pairwise calls to walk any source version to any
 target. Steppers must therefore be reversible if you want to support
@@ -83,8 +83,10 @@ rollbacks.
 
 ## JSON shapes
 
-The full shapes live in `mijnspel-sdk/src/abi.rs` and are
-re-exported at the crate root. The most important ones:
+The generated host payload schema is published at
+`docs/api/wasm-abi.schema.json`. Rust result shapes live in
+`mijnspel-sdk/src/abi.rs` and are re-exported at the crate root. The
+most important ones:
 
 ```rust
 pub struct ValidateOutcome { Ok | Reject { message: String } }

@@ -1,0 +1,318 @@
+{
+  "$id": "https://mijnspel.nl/schemas/wasm-abi.schema.json",
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "additionalProperties": false,
+  "properties": {
+    "migration_stepper": {
+      "additionalProperties": false,
+      "properties": {
+        "state": {
+          "description": "Any JSON value accepted by the game runtime.",
+          "type": [
+            "object",
+            "array",
+            "string",
+            "number",
+            "integer",
+            "boolean",
+            "null"
+          ]
+        },
+        "version": {
+          "type": "integer"
+        }
+      },
+      "required": [
+        "version",
+        "state"
+      ],
+      "type": "object"
+    },
+    "process_signal": {
+      "additionalProperties": false,
+      "properties": {
+        "appId": {
+          "type": "string"
+        },
+        "callerSub": {
+          "type": "string"
+        },
+        "gameId": {
+          "type": "string"
+        },
+        "nowMs": {
+          "type": "integer"
+        },
+        "payload": {
+          "description": "Any JSON value accepted by the game runtime.",
+          "type": [
+            "object",
+            "array",
+            "string",
+            "number",
+            "integer",
+            "boolean",
+            "null"
+          ]
+        },
+        "row": {
+          "additionalProperties": true,
+          "type": "object"
+        },
+        "signalType": {
+          "type": "string"
+        },
+        "state": {
+          "description": "Any JSON value accepted by the game runtime.",
+          "type": [
+            "object",
+            "array",
+            "string",
+            "number",
+            "integer",
+            "boolean",
+            "null"
+          ]
+        }
+      },
+      "required": [
+        "appId",
+        "gameId",
+        "state",
+        "signalType",
+        "callerSub",
+        "payload",
+        "row",
+        "nowMs"
+      ],
+      "type": "object"
+    },
+    "process_update": {
+      "additionalProperties": false,
+      "properties": {
+        "appId": {
+          "type": "string"
+        },
+        "gameId": {
+          "type": "string"
+        },
+        "priorState": {
+          "description": "Any JSON value accepted by the game runtime.",
+          "type": [
+            "object",
+            "array",
+            "string",
+            "number",
+            "integer",
+            "boolean",
+            "null"
+          ]
+        },
+        "priors": {
+          "additionalProperties": true,
+          "type": "object"
+        },
+        "row": {
+          "additionalProperties": true,
+          "type": "object"
+        },
+        "state": {
+          "description": "Any JSON value accepted by the game runtime.",
+          "type": [
+            "object",
+            "array",
+            "string",
+            "number",
+            "integer",
+            "boolean",
+            "null"
+          ]
+        }
+      },
+      "required": [
+        "appId",
+        "gameId",
+        "priorState",
+        "state",
+        "row",
+        "priors"
+      ],
+      "type": "object"
+    },
+    "state_for_lobby_start": {
+      "additionalProperties": false,
+      "properties": {
+        "appId": {
+          "type": "string"
+        },
+        "gameId": {
+          "type": "string"
+        },
+        "lobbyId": {
+          "description": "Any JSON value accepted by the game runtime.",
+          "type": [
+            "object",
+            "array",
+            "string",
+            "number",
+            "integer",
+            "boolean",
+            "null"
+          ]
+        },
+        "members": {
+          "items": {
+            "type": "string"
+          },
+          "type": "array"
+        },
+        "ownerSub": {
+          "type": "string"
+        },
+        "payload": {
+          "description": "Any JSON value accepted by the game runtime.",
+          "type": [
+            "object",
+            "array",
+            "string",
+            "number",
+            "integer",
+            "boolean",
+            "null"
+          ]
+        }
+      },
+      "required": [
+        "appId",
+        "gameId",
+        "lobbyId",
+        "ownerSub",
+        "members",
+        "payload"
+      ],
+      "type": "object"
+    },
+    "validate_create_request": {
+      "additionalProperties": false,
+      "properties": {
+        "appId": {
+          "type": "string"
+        },
+        "gameId": {
+          "type": "string"
+        },
+        "state": {
+          "description": "Any JSON value accepted by the game runtime.",
+          "type": [
+            "object",
+            "array",
+            "string",
+            "number",
+            "integer",
+            "boolean",
+            "null"
+          ]
+        }
+      },
+      "required": [
+        "appId",
+        "gameId",
+        "state"
+      ],
+      "type": "object"
+    },
+    "validate_lobby_create": {
+      "additionalProperties": false,
+      "properties": {
+        "appId": {
+          "type": "string"
+        },
+        "lobbyId": {
+          "type": "string"
+        },
+        "members": {
+          "items": {
+            "type": "string"
+          },
+          "type": "array"
+        },
+        "ownerSub": {
+          "type": "string"
+        },
+        "payload": {
+          "description": "Any JSON value accepted by the game runtime.",
+          "type": [
+            "object",
+            "array",
+            "string",
+            "number",
+            "integer",
+            "boolean",
+            "null"
+          ]
+        }
+      },
+      "required": [
+        "appId",
+        "lobbyId",
+        "ownerSub",
+        "members",
+        "payload"
+      ],
+      "type": "object"
+    },
+    "validate_update_request": {
+      "additionalProperties": false,
+      "properties": {
+        "appId": {
+          "type": "string"
+        },
+        "gameId": {
+          "type": "string"
+        },
+        "priorState": {
+          "description": "Any JSON value accepted by the game runtime.",
+          "type": [
+            "object",
+            "array",
+            "string",
+            "number",
+            "integer",
+            "boolean",
+            "null"
+          ]
+        },
+        "state": {
+          "description": "Any JSON value accepted by the game runtime.",
+          "type": [
+            "object",
+            "array",
+            "string",
+            "number",
+            "integer",
+            "boolean",
+            "null"
+          ]
+        }
+      },
+      "required": [
+        "appId",
+        "gameId",
+        "priorState",
+        "state"
+      ],
+      "type": "object"
+    }
+  },
+  "required": [
+    "validate_create_request",
+    "validate_update_request",
+    "process_update",
+    "validate_lobby_create",
+    "state_for_lobby_start",
+    "process_signal",
+    "migration_stepper"
+  ],
+  "title": "Mijnspel WASM ABI host payloads",
+  "type": "object"
+}

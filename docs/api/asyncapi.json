@@ -1,0 +1,67 @@
+{
+  "asyncapi": "3.0.0",
+  "channels": {
+    "$connect": {
+      "address": "$connect",
+      "messages": {
+        "json": {
+          "$ref": "#/components/messages/json"
+        }
+      }
+    },
+    "$default": {
+      "address": "$default",
+      "messages": {
+        "json": {
+          "$ref": "#/components/messages/json"
+        }
+      }
+    },
+    "$disconnect": {
+      "address": "$disconnect",
+      "messages": {
+        "json": {
+          "$ref": "#/components/messages/json"
+        }
+      }
+    },
+    "ping": {
+      "address": "ping",
+      "messages": {
+        "json": {
+          "$ref": "#/components/messages/json"
+        }
+      }
+    },
+    "subscribe": {
+      "address": "subscribe",
+      "messages": {
+        "json": {
+          "$ref": "#/components/messages/json"
+        }
+      }
+    },
+    "unsubscribe": {
+      "address": "unsubscribe",
+      "messages": {
+        "json": {
+          "$ref": "#/components/messages/json"
+        }
+      }
+    }
+  },
+  "components": {
+    "messages": {
+      "json": {
+        "payload": {
+          "additionalProperties": true,
+          "type": "object"
+        }
+      }
+    }
+  },
+  "info": {
+    "title": "Mijnspel Backend WebSocket API",
+    "version": "1.0.0"
+  }
+}

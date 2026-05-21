@@ -45,9 +45,9 @@ the same lobby endpoints.
 
 ## `validate_lobby_create`
 
-Called on `POST /lobbies?appId=<id>`. You see the proposed `members`
-list and the opaque per-game `payload`. Reject if the combination is
-illegal:
+Called on `POST /lobbies?appId=<id>`. Input is `{ appId, lobbyId,
+ownerSub, members, payload }`. Reject if the proposed members and
+opaque per-game `payload` are illegal:
 
 ```rust
 pub fn validate_lobby_create(input: serde_json::Value) -> ValidateOutcome {
@@ -66,12 +66,12 @@ and hands it back in `state_for_lobby_start`.
 ## `state_for_lobby_start`
 
 Called on the autostart-triggering join when
-`auto_start_when_full = true`, or on an explicit start call (when
-exposed). You receive the full lobby. Return the initial game state:
+`auto_start_when_full = true`. Input is `{ appId, gameId, lobbyId,
+ownerSub, members, payload }`. Return the initial game state:
 
 ```rust
 pub fn state_for_lobby_start(input: serde_json::Value) -> serde_json::Value {
-    let members = input["lobby"]["members"].as_array().cloned().unwrap_or_default();
+    let members = input["members"].as_array().cloned().unwrap_or_default();
     serde_json::json!({
         "schemaVersion": current_schema_version(),
         "members": members,
@@ -108,23 +108,22 @@ Implement it by exporting `process_signal`:
 ```rust
 pub fn process_signal(input: serde_json::Value) -> SignalOutcome {
     let row = &input["row"];
-    let signal = &input["signal"];
-    let claims = &input["claims"];
+    let signal_type = input["signalType"].as_str().unwrap_or("");
+    let caller_sub = input["callerSub"].as_str().unwrap_or("");
 
-    let kind = signal["kind"].as_str().unwrap_or("");
-    match kind {
+    match signal_type {
         "knock" => {
             // basic cooldown enforcement: at most one knock per minute
-            if recent_knock(row, claims) {
+            if recent_knock(row, caller_sub) {
                 return SignalOutcome::Reject {
                     message: "knock cooldown".into(),
                 };
             }
             SignalOutcome::Ok {
-                new_state: stamp_knock_time(row, claims),
-                targets: opponents_of(row, claims),
+                new_state: stamp_knock_time(row, caller_sub),
+                targets: opponents_of(row, caller_sub),
                 webpush: true,
-                push_title: format!("{} is knocking", display_name(claims)),
+                push_title: format!("{} is knocking", display_name(caller_sub)),
                 push_body: "Tap to return".into(),
             }
         }
