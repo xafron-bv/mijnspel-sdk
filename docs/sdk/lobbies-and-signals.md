@@ -67,7 +67,7 @@ and hands it back in `state_for_lobby_start`.
 
 Called on the autostart-triggering join when
 `auto_start_when_full = true`. Input is `{ appId, gameId, lobbyId,
-ownerSub, members, payload }`. Return the initial game state:
+ownerSub, members, payload, seed }`. Return the initial game state:
 
 ```rust
 pub fn state_for_lobby_start(input: serde_json::Value) -> serde_json::Value {
@@ -80,6 +80,25 @@ pub fn state_for_lobby_start(input: serde_json::Value) -> serde_json::Value {
     })
 }
 ```
+
+## Seats and hidden information
+
+The host never lets a client choose a seat. For a game where seats or
+hidden cards matter:
+
+1. In `state_for_lobby_start`, assign `seats: { <sub>: 1..N }` from
+   `members` (the owner is first) and deal from `seed`.
+2. Have clients send only their move (`PUT /games/{id}` with
+   `{ state: { move } }`). In `validate_update_request`, reject unless
+   `priorState.seats[callerSub]` is the seat whose turn it is; in
+   `process_update`, compute the next state from `priorState`.
+3. Export `state_for_viewer` so every row the host sends carries only
+   the receiving player's hand.
+
+`POST /games/{id}/reset` and `/abandon` are limited to the game's
+`members` (or, for a game created with `POST /games`, its creator);
+anyone else gets `403`. `POST /games` with the id of such a game gets
+`409 Game already exists` for anyone else.
 
 The promotion is atomic: the host writes the new game row, stamps
 `gameId` on the lobby, and flips the lobby `pending → started` in a

@@ -42,7 +42,7 @@ edition = "2021"
 crate-type = ["cdylib"]
 
 [dependencies]
-mijnspel-sdk = { git = "https://github.com/xafron-bv/mijnspel-sdk", tag = "v0.1.0" }
+mijnspel-sdk = { git = "https://github.com/xafron-bv/mijnspel-sdk", tag = "v0.3.0" }
 serde = { version = "1", features = ["derive"] }
 serde_json = "1"
 ```
@@ -70,44 +70,51 @@ you add real game logic:
 
 ```rust
 // backend/runtime/src/lib.rs
-use mijnspel_sdk::abi::{ProcessUpdateOutput, ValidateOutcome};
+use mijnspel_sdk::abi::{
+    LeaderboardStatIds, LobbyPolicy, PlayersInRow, PriorStatIds, ProcessUpdateOutput,
+    ValidateOutcome,
+};
+use mijnspel_sdk::guest::GuestRuntime;
+use serde_json::Value;
 
-// (See docs/sdk/abi-reference.md for the export-glue boilerplate. The
-// guest macro in mijnspel_sdk::guest::reference shows the exact
-// no_mangle extern "C" wrappers your crate needs to expose. They are
-// thin: alloc, free, abi_version, current_schema_version, and one wrapper
-// per JSON-typed export below.)
+pub struct YourGame;
 
-pub fn abi_version() -> i64 {
-    mijnspel_sdk::abi::HOST_ABI_VERSION
+impl GuestRuntime for YourGame {
+    fn current_schema_version() -> i64 { 1 }
+    fn validate_create_request(_input: Value) -> ValidateOutcome { ValidateOutcome::ok() }
+    fn validate_update_request(_input: Value) -> ValidateOutcome { ValidateOutcome::ok() }
+    fn validate_lobby_create(_input: Value) -> ValidateOutcome { ValidateOutcome::ok() }
+    fn lobby_policy() -> LobbyPolicy { LobbyPolicy::default() }
+
+    fn create_initial_state(input: Value) -> Value {
+        input.get("state").cloned().unwrap_or(Value::Null)
+    }
+
+    fn state_for_lobby_start(input: Value) -> Value {
+        input.get("payload").cloned().unwrap_or(Value::Null)
+    }
+
+    fn process_update(input: Value) -> ProcessUpdateOutput {
+        let next = input.get("state").cloned().unwrap_or(Value::Null);
+        ProcessUpdateOutput { next_state: next, stat_updates: vec![] }
+    }
+
+    fn prior_stat_ids() -> PriorStatIds { PriorStatIds::default() }
+    fn players_in_row(_row: Value) -> PlayersInRow { PlayersInRow::default() }
+    fn leaderboard_stat_ids() -> LeaderboardStatIds { LeaderboardStatIds::default() }
 }
 
-pub fn current_schema_version() -> i64 { 1 }
-
-pub fn validate_create_request(_input: serde_json::Value) -> ValidateOutcome {
-    ValidateOutcome::ok()
-}
-
-pub fn create_initial_state(input: serde_json::Value) -> serde_json::Value {
-    input.get("state").cloned().unwrap_or(serde_json::Value::Null)
-}
-
-pub fn process_update(input: serde_json::Value) -> ProcessUpdateOutput {
-    let next = input.get("request")
-        .and_then(|r| r.get("state"))
-        .cloned()
-        .unwrap_or(serde_json::Value::Null);
-    ProcessUpdateOutput { next_state: next, stat_updates: vec![] }
-}
+mijnspel_sdk::export_runtime!(YourGame);
 ```
 
-For the export-glue boilerplate (alloc/free, ptr/len packing, JSON
-in/out per export), copy from the SDK's `guest::reference` module —
-view it with `cargo doc --open -p mijnspel-sdk` and navigate
-to `mijnspel_sdk::guest::reference`. The reference is
-documented inline as the canonical shape; the `#[no_mangle] extern "C"`
-blocks must live in your leaf crate (not in the SDK) so the linker
-picks them up when building `cdylib`.
+`export_runtime!` emits the export glue (alloc/free, ptr/len packing,
+JSON in/out per export) in your crate, for `wasm32` only. The migration
+crate is one line until your stored shape changes:
+
+```rust
+// backend/migration/src/lib.rs
+mijnspel_sdk::export_migration!(mijnspel_sdk::guest::IdentityMigration<1>);
+```
 
 ## Build
 
@@ -142,7 +149,8 @@ docker run --rm -p 3000:3000 \
 
 The container starts MiniStack, runs the bootstrap, sees your
 `local-wasm/your-game/` directory, sha256s the artifacts, uploads them
-under the production content-addressed S3 keys to the in-container
+under the production flat S3 keys (`your-game/runtime.wasm` and
+`your-game/migration.wasm`) to the in-container
 MiniStack, and seeds `app-registry.your-game`. A subsequent
 `POST /games?appId=your-game` exercises your WASM.
 

@@ -44,6 +44,10 @@ pub mod runtime_exports {
     /// `POST /games/{id}/signal`; if a guest does not export it the
     /// route returns 404 (signaling unsupported for this appId).
     pub const PROCESS_SIGNAL: &str = "process_signal";
+    /// Optional. Per-viewer redaction. When a guest exports it, the host
+    /// sends every outgoing game row with `state` replaced by this export's
+    /// result for the receiving user; without it rows go out unchanged.
+    pub const STATE_FOR_VIEWER: &str = "state_for_viewer";
 }
 
 /// Names of the migration exports.

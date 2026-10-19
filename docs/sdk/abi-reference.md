@@ -55,20 +55,29 @@ Names are constants on `mijnspel_sdk::abi::runtime_exports`:
 
 | Export | Input | Output |
 |---|---|---|
-| `validate_create_request` | `{ appId, gameId, state }` | `ValidateOutcome` |
-| `validate_update_request` | `{ appId, gameId, priorState, state }` | `ValidateOutcome` |
+| `validate_create_request` | `{ appId, gameId, state, callerSub, seed }` | `ValidateOutcome` |
+| `validate_update_request` | `{ appId, gameId, priorState, state, callerSub }` | `ValidateOutcome` |
 | `validate_lobby_create` | `{ appId, lobbyId, ownerSub, members, payload }` | `ValidateOutcome` |
 | `lobby_policy` | `{}` | `LobbyPolicy` |
-| `create_initial_state` | `{ appId, gameId, state }` | inner state JSON |
-| `state_for_lobby_start` | `{ appId, gameId, lobbyId, ownerSub, members, payload }` | inner state JSON (plus optional row-extension fields the host lifts) |
+| `create_initial_state` | `{ appId, gameId, state, callerSub, seed }` | inner state JSON |
+| `state_for_lobby_start` | `{ appId, gameId, lobbyId, ownerSub, members, payload, seed }` | inner state JSON (plus optional row-extension fields the host lifts) |
 | `prior_stat_ids` | `{}` | `PriorStatIds` |
 | `players_in_row` | `{ row }` | `PlayersInRow` |
-| `process_update` | `{ appId, gameId, priorState, state, row, priors }` | `ProcessUpdateOutput` |
+| `process_update` | `{ appId, gameId, priorState, state, row, priors, callerSub, seed }` | `ProcessUpdateOutput` |
 | `leaderboard_stat_ids` | `{}` | `LeaderboardStatIds` |
 | `process_signal` *(optional)* | `{ appId, gameId, state, signalType, callerSub, payload, row, nowMs }` | `SignalOutcome` |
+| `state_for_viewer` *(optional)* | `{ appId, gameId, viewerSub, state, row }` | the JSON sent to `viewerSub` in place of `row.state` |
+
+`callerSub` is the authenticated requester. `seed` is fresh host
+randomness for the request: 16 lowercase hex characters (64 bits).
 
 When the host sees no `process_signal` export, the corresponding
-`POST /games/{id}/signal` route returns 404 for that appId.
+`POST /games/{id}/signal` route returns 404 for that appId. When it sees
+no `state_for_viewer` export, game rows go out unchanged; when it does,
+every outgoing row is redacted per receiving user (see
+[Runtime exports](./runtime-exports.md#state_for_viewer-optional)). The
+host detects `state_for_viewer` by name, so an export with the wrong
+signature fails closed; the intake verifier rejects it.
 
 ## Migration exports
 
@@ -137,14 +146,36 @@ pub enum SignalOutcome {
 All structs use `serde(rename_all = "camelCase")`, so `min_members`
 crosses the boundary as `minMembers`.
 
-## Boilerplate (the guest-side macro)
+## Boilerplate (the guest-side macros)
 
-`mijnspel_sdk::guest::reference` is a documented reference
-implementation of the export glue (allocation, packing, JSON
-encode/decode, `#[no_mangle] extern "C"` wrappers). Copy it into your
-runtime/migration crates — it lives there rather than as a `macro_rules!`
-in the SDK because the `#[no_mangle]` blocks must reside in the leaf
-`cdylib` crate to be picked up by the linker.
+Don't hand-write the export glue. Implement the trait and call the
+macro once at the end of each crate's `lib.rs`:
+
+```rust
+// runtime crate
+pub struct MyGame;
+impl mijnspel_sdk::guest::GuestRuntime for MyGame { /* … */ }
+mijnspel_sdk::export_runtime!(MyGame);                    // required exports only
+// mijnspel_sdk::export_runtime!(MyGame, state_for_viewer); // plus optional hooks
+
+// migration crate
+mijnspel_sdk::export_migration!(mijnspel_sdk::guest::IdentityMigration<1>);
+```
+
+`export_runtime!` emits `__alloc`, `__free`, `abi_version`,
+`current_schema_version` and the ten required JSON exports; the
+optional hooks `process_signal` and `state_for_viewer` are emitted only
+when named. `export_migration!` emits `__alloc`, `__free`,
+`abi_version`, `current_schema_version`, `min_supported_version` and
+the two steppers, passing the host's `{ version, state }` input to the
+trait as two arguments. `IdentityMigration<V>` is the migration for a
+game whose stored shape never changed: version `V` is current and
+minimum, and both steppers return the state unchanged.
+
+The macros expand in your crate, so the `#[no_mangle] extern "C"`
+functions land in the leaf `cdylib` where the linker exports them. They
+are emitted only for `target_arch = "wasm32"`, so `cargo test` still
+runs natively.
 
 ## What the host *does not* expose
 
@@ -155,8 +186,8 @@ There are no host imports of any kind. The WASM module cannot:
 - Read environment variables.
 - Read system time directly (the host injects time into the request
   payload where needed).
-- Generate randomness from the OS (the host injects nonces / seeds
-  where needed).
+- Generate randomness from the OS (the host injects `seed` where
+  needed).
 
 If your game needs any of the above, the host computes it before
 calling and includes it in the JSON input.

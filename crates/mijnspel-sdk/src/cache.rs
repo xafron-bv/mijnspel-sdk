@@ -16,6 +16,16 @@ pub struct CachedModule {
     pub module: Module,
 }
 
+impl CachedModule {
+    /// Whether the compiled module exports anything under `name`, whatever
+    /// its type. Optional hooks whose absence would widen what the host
+    /// sends (`state_for_viewer`) are detected this way, so an export with
+    /// the wrong signature fails the call instead of being skipped.
+    pub fn has_export(&self, name: &str) -> bool {
+        self.module.get_export(name).is_some()
+    }
+}
+
 pub struct ModuleCache {
     inner: Mutex<HashMap<(String, String), CachedModule>>,
 }

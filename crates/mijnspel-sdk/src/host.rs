@@ -11,7 +11,7 @@ use std::sync::Arc;
 use serde::de::DeserializeOwned;
 use serde_json::Value;
 use sha2::{Digest, Sha256};
-use wasmtime::{Caller, Engine, Linker, Memory, Module, Store, TypedFunc};
+use wasmtime::{Caller, Engine, ExternType, Linker, Memory, Module, Store, TypedFunc, ValType};
 
 use crate::abi::{
     memory_exports, migration_exports, runtime_exports, unpack_ptr_len, HostJson,
@@ -32,6 +32,7 @@ pub enum WasmError {
     Call(String),
     Decode(String),
     Memory(String),
+    Verify(String),
 }
 
 impl std::fmt::Display for WasmError {
@@ -47,6 +48,7 @@ impl std::fmt::Display for WasmError {
             WasmError::Call(msg) => write!(f, "wasm call failed: {msg}"),
             WasmError::Decode(msg) => write!(f, "wasm decode failed: {msg}"),
             WasmError::Memory(msg) => write!(f, "wasm memory error: {msg}"),
+            WasmError::Verify(msg) => write!(f, "wasm verify failed: {msg}"),
         }
     }
 }
@@ -75,8 +77,14 @@ impl BinaryKind {
 }
 
 /// Default S3-backed fetcher. Reads the bucket name from
-/// `WASM_BINARIES_BUCKET`. Keys are content-addressed:
-/// `<appId>/<runtime|migration>/<sha>.wasm`.
+/// `WASM_BINARIES_BUCKET`. Keys are flat and overwritten in place:
+/// `<appId>/<runtime|migration>.wasm`. The served object is **authoritative**
+/// (decision (ii)): request-time `fetch` serves the bytes as-is. The `sha`
+/// argument is the loader cache key (so a flip busts the per-`(appId,sha)`
+/// module cache) plus an intake-time integrity expectation; it is NOT a
+/// request-time gate, so a mismatch is logged but never fatal. Intake's
+/// verifying readback uses [`S3BinaryFetcher::fetch_verified`] instead. This is
+/// the same serve-as-is shape `LocalDiskBinaryFetcher` already serves from disk.
 pub struct S3BinaryFetcher {
     s3: aws_sdk_s3::Client,
     bucket: String,
@@ -95,12 +103,16 @@ impl S3BinaryFetcher {
             .unwrap_or_else(|_| "mijnspel-backend-dev-binaries".to_string());
         Self::new(s3, bucket)
     }
-}
 
-#[async_trait::async_trait]
-impl BinaryFetcher for S3BinaryFetcher {
-    async fn fetch(&self, app_id: &str, kind: BinaryKind, sha: &str) -> Result<Vec<u8>, WasmError> {
-        let key = format!("{}/{}/{}.wasm", app_id, kind.segment(), sha);
+    /// GET the served object bytes for `<appId>/<kind>.wasm` without verifying
+    /// the sha. Shared by the request-time `fetch` (serve-as-is) and the
+    /// intake-time `fetch_verified` (which layers the sha check on top).
+    async fn get_object_bytes(
+        &self,
+        app_id: &str,
+        kind: BinaryKind,
+    ) -> Result<Vec<u8>, WasmError> {
+        let key = format!("{}/{}.wasm", app_id, kind.segment());
         let resp = self
             .s3
             .get_object()
@@ -114,17 +126,56 @@ impl BinaryFetcher for S3BinaryFetcher {
             .collect()
             .await
             .map_err(|e| WasmError::Fetch(format!("s3 read {}: {e:?}", key)))?;
-        let bytes = body.into_bytes().to_vec();
+        Ok(body.into_bytes().to_vec())
+    }
+
+    /// Intake-time verifying readback: GET the served object and assert its sha
+    /// matches `sha`, returning the bytes on success. Used ONLY by the intake
+    /// lambda's activation/repair path — NOT by the request-time `fetch`, which
+    /// serves the object as-is (decision (ii)). Keeping the two methods distinct
+    /// is deliberate: request-time serving never rejects a skewed object (it
+    /// serves the previous verified artifact instead of 500ing), while
+    /// intake-time activation stays strictly verified.
+    pub async fn fetch_verified(
+        &self,
+        app_id: &str,
+        kind: BinaryKind,
+        sha: &str,
+    ) -> Result<Vec<u8>, WasmError> {
+        let bytes = self.get_object_bytes(app_id, kind).await?;
         verify_sha(&bytes, sha)?;
+        Ok(bytes)
+    }
+}
+
+#[async_trait::async_trait]
+impl BinaryFetcher for S3BinaryFetcher {
+    async fn fetch(&self, app_id: &str, kind: BinaryKind, sha: &str) -> Result<Vec<u8>, WasmError> {
+        let bytes = self.get_object_bytes(app_id, kind).await?;
+        // Serve-as-is (decision (ii)): the served object is authoritative. The
+        // registry sha is the loader cache key + an intake-time integrity
+        // expectation, NOT a request-time gate — so a mismatch is logged but
+        // never fatal. A brief flip→copy skew window therefore serves the
+        // previous verified artifact rather than 500ing; genuine corruption
+        // surfaces later at `Module::from_binary`, not here.
+        if let Err(e) = verify_sha(&bytes, sha) {
+            eprintln!(
+                "wasm fetch {}/{}: serving object as-is despite {e}",
+                app_id,
+                kind.segment()
+            );
+        }
         Ok(bytes)
     }
 }
 
 /// Disk-backed fetcher used by `local-backend` so devs can drop binaries
 /// into `./local-wasm/<appId>/{runtime,migration}.wasm` without standing
-/// up LocalStack S3. Sha verification still runs — `dev-up.sh` computes
-/// the expected sha when seeding `app-registry`, so a stale on-disk blob
-/// surfaces the same error as a stale S3 object.
+/// up LocalStack S3. This flat layout is identical in shape to the S3
+/// keyspace — both fetchers resolve `<appId>/<kind>.wasm` and differ only
+/// in disk-vs-S3. Serve-as-is (decision (ii)): like the S3 fetcher, a sha
+/// mismatch is logged but not fatal — the on-disk object is authoritative,
+/// which is exactly the serve-as-is model the local dev server already uses.
 pub struct LocalDiskBinaryFetcher {
     root: std::path::PathBuf,
 }
@@ -145,7 +196,11 @@ impl BinaryFetcher for LocalDiskBinaryFetcher {
         let bytes = tokio::fs::read(&path).await.map_err(|e| {
             WasmError::Fetch(format!("local read {}: {e}", path.display()))
         })?;
-        verify_sha(&bytes, sha)?;
+        // Serve-as-is (decision (ii)): log a sha mismatch but still serve the
+        // on-disk bytes — the object is authoritative, not the registry sha.
+        if let Err(e) = verify_sha(&bytes, sha) {
+            eprintln!("wasm local fetch {}: serving as-is despite {e}", path.display());
+        }
         Ok(bytes)
     }
 }
@@ -337,6 +392,12 @@ impl Instance {
             .is_ok()
     }
 
+    /// Returns `true` if the instance exports anything named `name`,
+    /// whatever its type.
+    pub fn has_export(&mut self, name: &str) -> bool {
+        self.instance.get_export(&mut self.store, name).is_some()
+    }
+
     /// Invoke an `i64`-returning scalar export (e.g. `abi_version`,
     /// `current_schema_version`).
     pub fn call_i64(&mut self, name: &str) -> Result<i64, WasmError> {
@@ -442,6 +503,19 @@ impl RuntimeInstance {
             .call_json(runtime_exports::PROCESS_SIGNAL, input)?;
         Ok(Some(outcome))
     }
+
+    /// Optional. Returns `Ok(None)` if the guest has no `state_for_viewer`
+    /// export (rows go out unchanged). Presence is decided by name only, so
+    /// an export with the wrong signature is an error, never a skip.
+    pub fn state_for_viewer(&mut self, input: Value) -> Result<Option<Value>, WasmError> {
+        if !self.inner.has_export(runtime_exports::STATE_FOR_VIEWER) {
+            return Ok(None);
+        }
+        let view = self
+            .inner
+            .call_json(runtime_exports::STATE_FOR_VIEWER, input)?;
+        Ok(Some(view))
+    }
 }
 
 /// High-level wrapper around a migration instance.
@@ -483,5 +557,190 @@ impl MigrationInstance {
         let payload = serde_json::json!({ "version": version, "state": state });
         self.inner
             .call_json(migration_exports::DOWNGRADE_TO_PREVIOUS, payload)
+    }
+}
+
+/// Outcome of an offline verification of a runtime (and optional migration)
+/// WASM pair. The shape mirrors the JSON the `mijnspel-wasm-verify` CLI
+/// emits, so both the manual intake script and the upload-triggered intake
+/// lambda consume identical fields.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct VerifyReport {
+    pub abi_version: i64,
+    pub current_schema_version: i64,
+    pub runtime_sha256: String,
+    /// Empty string when no migration was supplied (first-time runtime-only
+    /// apps); otherwise the sha256 of the migration bytes.
+    pub migration_sha256: String,
+}
+
+fn sha256_hex(bytes: &[u8]) -> String {
+    let mut h = Sha256::new();
+    h.update(bytes);
+    hex::encode(h.finalize())
+}
+
+fn compile_bytes(bytes: &[u8], label: &str) -> Result<CachedModule, WasmError> {
+    let engine = Engine::default();
+    let module = Module::new(&engine, bytes)
+        .map_err(|e| WasmError::Compile(format!("{label}: {e:?}")))?;
+    Ok(CachedModule { engine, module })
+}
+
+/// Optional JSON exports must have the `(i32, i32) -> i64` boundary
+/// signature when present. `state_for_viewer` is detected by name at request
+/// time, so a wrong signature would fail every read of that game.
+fn verify_optional_json_exports(cached: &CachedModule) -> Result<(), WasmError> {
+    let name = runtime_exports::STATE_FOR_VIEWER;
+    let Some(export) = cached.module.get_export(name) else {
+        return Ok(());
+    };
+    let ok = match export {
+        ExternType::Func(func) => {
+            let params: Vec<ValType> = func.params().collect();
+            let results: Vec<ValType> = func.results().collect();
+            matches!(params.as_slice(), [ValType::I32, ValType::I32])
+                && matches!(results.as_slice(), [ValType::I64])
+        }
+        _ => false,
+    };
+    if !ok {
+        return Err(WasmError::Verify(format!(
+            "export `{name}` must be a function `(ptr: u32, len: u32) -> u64`"
+        )));
+    }
+    Ok(())
+}
+
+/// Offline verification of a runtime + optional migration WASM pair against
+/// the host ABI. This is the single shared verifier used by the operator
+/// intake script (via the `mijnspel-wasm-verify` CLI) and the
+/// upload-triggered intake lambda.
+///
+/// It compiles each artifact, binds the high-level instance (which asserts
+/// `abi_version == HOST_ABI_VERSION`), reads `current_schema_version`, probes
+/// the required runtime exports, and — when a migration is supplied — asserts
+/// the runtime and migration agree on which schema is current. No guest entry
+/// point that mutates state is invoked, so a trapping migration body is not
+/// exercised here.
+///
+/// `migration` is `None` for a first-time, runtime-only app; in that case the
+/// returned `migration_sha256` is the empty string and the schema-agreement
+/// check is skipped.
+pub fn verify_artifacts(
+    runtime: &[u8],
+    migration: Option<&[u8]>,
+) -> Result<VerifyReport, WasmError> {
+    let runtime_cached = compile_bytes(runtime, "compile runtime.wasm")?;
+    verify_optional_json_exports(&runtime_cached)?;
+    let mut runtime_inst = RuntimeInstance::new(&runtime_cached)?;
+    let runtime_schema = runtime_inst.current_schema_version()?;
+
+    // Touch every required export name so missing-export defects surface here,
+    // not at request time. We only care that the symbol resolves.
+    let mut probe = Instance::new(&runtime_cached)?;
+    for name in [
+        runtime_exports::ABI_VERSION,
+        runtime_exports::CURRENT_SCHEMA_VERSION,
+    ] {
+        probe.call_i64(name)?;
+    }
+
+    let runtime_sha256 = sha256_hex(runtime);
+
+    let migration_sha256 = match migration {
+        Some(migration_bytes) => {
+            let migration_cached = compile_bytes(migration_bytes, "compile migration.wasm")?;
+            let mut migration_inst = MigrationInstance::new(&migration_cached)?;
+            let migration_schema = migration_inst.current_schema_version()?;
+            let _min = migration_inst.min_supported_version()?;
+            if runtime_schema != migration_schema {
+                return Err(WasmError::Verify(format!(
+                    "runtime.current_schema_version ({runtime_schema}) != \
+                     migration.current_schema_version ({migration_schema}) — the runtime and \
+                     migration must agree on which schema is current. Rebuild both from the \
+                     same source."
+                )));
+            }
+            sha256_hex(migration_bytes)
+        }
+        None => String::new(),
+    };
+
+    Ok(VerifyReport {
+        abi_version: HOST_ABI_VERSION,
+        current_schema_version: runtime_schema,
+        runtime_sha256,
+        migration_sha256,
+    })
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    fn sha_of(bytes: &[u8]) -> String {
+        let mut h = Sha256::new();
+        h.update(bytes);
+        hex::encode(h.finalize())
+    }
+
+    #[test]
+    fn verify_sha_accepts_match_and_rejects_mismatch() {
+        // `verify_sha` is the verifying core shared by `fetch_verified` and the
+        // intake readback. It accepts a matching digest (case-insensitively)
+        // and rejects a mismatch — the latter is what makes `fetch_verified`
+        // (and intake activation) reject a skewed object.
+        let bytes = b"hello wasm";
+        let good = sha_of(bytes);
+        assert!(verify_sha(bytes, &good).is_ok());
+        assert!(verify_sha(bytes, &good.to_uppercase()).is_ok());
+        assert!(verify_sha(bytes, "deadbeef").is_err());
+    }
+
+    #[test]
+    fn verify_rejects_state_for_viewer_with_wrong_signature() {
+        // Smallest module exporting `state_for_viewer: () -> ()`.
+        let mut wasm = vec![0x00, 0x61, 0x73, 0x6d, 0x01, 0x00, 0x00, 0x00];
+        wasm.extend([0x01, 0x04, 0x01, 0x60, 0x00, 0x00]); // type 0: () -> ()
+        wasm.extend([0x03, 0x02, 0x01, 0x00]); // func 0: type 0
+        wasm.extend([0x07, 0x14, 0x01, 0x10]); // export section, one name of 16 bytes
+        wasm.extend(b"state_for_viewer");
+        wasm.extend([0x00, 0x00]); // func 0
+        wasm.extend([0x0a, 0x04, 0x01, 0x02, 0x00, 0x0b]); // empty body
+
+        match verify_artifacts(&wasm, None) {
+            Err(WasmError::Verify(msg)) => assert!(msg.contains("state_for_viewer"), "{msg}"),
+            Err(other) => panic!("expected a Verify error, got {other}"),
+            Ok(_) => panic!("expected a Verify error, got Ok"),
+        }
+    }
+
+    #[tokio::test]
+    async fn local_fetch_serves_as_is_on_sha_mismatch() {
+        // Decision (ii): the request-time fetcher returns the on-disk bytes
+        // even when the passed sha does not match — it never gates serving.
+        let dir = std::env::temp_dir().join(format!(
+            "mijnspel-host-test-{}-{}",
+            std::process::id(),
+            "serve-as-is"
+        ));
+        let app_dir = dir.join("my-game");
+        std::fs::create_dir_all(&app_dir).expect("mkdir");
+        let bytes = b"not-a-real-wasm-but-serve-anyway";
+        std::fs::write(app_dir.join("runtime.wasm"), bytes).expect("write");
+
+        let fetcher = LocalDiskBinaryFetcher::new(&dir);
+        let served = fetcher
+            .fetch(
+                "my-game",
+                BinaryKind::Runtime,
+                "0000000000000000000000000000000000000000000000000000000000000000",
+            )
+            .await
+            .expect("serve-as-is must not error on a sha mismatch");
+        assert_eq!(served, bytes, "fetch returns the on-disk bytes verbatim");
+
+        std::fs::remove_dir_all(&dir).ok();
     }
 }

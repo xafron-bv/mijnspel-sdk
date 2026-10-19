@@ -74,12 +74,19 @@ The operator runs an internal intake script with your two artifacts.
 You don't see it directly. The script:
 
 1. Verifies (offline).
-2. Uploads each artifact under the content-addressed S3 key
-   (`<appId>/<runtime|migration>/<sha>.wasm`); same-sha re-uploads are
-   no-ops.
+2. Uploads each artifact to its flat, overwrite-in-place S3 key
+   (`<appId>/runtime.wasm` and `<appId>/migration.wasm`); the key is
+   fixed per `<kind>`, so a publish overwrites whatever was there
+   before. The sha256 is still computed and recorded in app-registry
+   (`currentRuntimeSha256` / `currentMigrationSha256`) as the integrity
+   expectation that every fetch verifies — it is no longer part of the
+   key.
 3. Reads back from S3 and re-verifies sha.
-4. Atomically flips `app-registry.<appId>` to point at the new sha
-   pair.
+4. Conditionally flips `app-registry.<appId>` to record the new sha
+   pair. The registry flip still gates which sha is recorded and
+   serializes promotion, but the object write itself is a plain
+   in-place `PutObject` overwrite — there is no content-addressed
+   atomic flip and no prior `<sha>` object is retained.
 5. Writes an audit-trail entry on the operator side.
 
 Within ≤ 60 s of the registry flip, every host instance is serving

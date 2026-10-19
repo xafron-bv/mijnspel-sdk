@@ -248,6 +248,12 @@
       "games-update": {
         "$schema": "http://json-schema.org/draft-04/schema#",
         "properties": {
+          "expectedUpdatedAt": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
           "state": {
             "type": [
               "object",
@@ -1025,6 +1031,37 @@
             "in": "query",
             "name": "appId",
             "required": true,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "description": "Comma-separated topics to replay, at most 10. Each topic is `<appId>:<scope>:<id>` with the request's appId: `<appId>:game:<gameId>` (any signed-in user), `<appId>:user:<sub>` and `<appId>:lobbies:<sub>` (only your own sub), or `<appId>:leaderboard:<statId>`. Topics you may not read are skipped. Missing or empty: 400 `No topics specified`; more than 10: 400 `Maximum 10 topics allowed`.",
+            "example": "my-game:game:3f2a9c1e-5b7d-4e8a-9c0f-1a2b3c4d5e6f",
+            "in": "query",
+            "name": "topics",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "description": "JSON object mapping a topic to the last `seq` you received for it (the `cursors` object of the previous response); only later events are returned. Default `{}`. Not a JSON object: 400 `Invalid cursors parameter`.",
+            "example": "{\"my-game:game:3f2a9c1e-5b7d-4e8a-9c0f-1a2b3c4d5e6f\":\"0192a1b2c3d4_00000000000000ff\"}",
+            "in": "query",
+            "name": "cursors",
+            "required": false,
+            "schema": {
+              "default": "{}",
+              "type": "string"
+            }
+          },
+          {
+            "description": "Only return events from this time on: epoch seconds, epoch milliseconds, or an RFC 3339 timestamp. With a cursor for the same topic, the later of the two wins. An unparseable value is ignored.",
+            "example": "2026-10-17T09:00:00Z",
+            "in": "query",
+            "name": "from",
+            "required": false,
             "schema": {
               "type": "string"
             }

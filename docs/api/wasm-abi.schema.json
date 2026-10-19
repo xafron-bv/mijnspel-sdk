@@ -93,6 +93,9 @@
         "appId": {
           "type": "string"
         },
+        "callerSub": {
+          "type": "string"
+        },
         "gameId": {
           "type": "string"
         },
@@ -116,6 +119,11 @@
           "additionalProperties": true,
           "type": "object"
         },
+        "seed": {
+          "description": "Fresh host randomness for this call: 64 bits as 16 lowercase hex characters.",
+          "pattern": "^[0-9a-f]{16}$",
+          "type": "string"
+        },
         "state": {
           "description": "Any JSON value accepted by the game runtime.",
           "type": [
@@ -135,7 +143,9 @@
         "priorState",
         "state",
         "row",
-        "priors"
+        "priors",
+        "callerSub",
+        "seed"
       ],
       "type": "object"
     },
@@ -180,6 +190,11 @@
             "boolean",
             "null"
           ]
+        },
+        "seed": {
+          "description": "Fresh host randomness for this call: 64 bits as 16 lowercase hex characters.",
+          "pattern": "^[0-9a-f]{16}$",
+          "type": "string"
         }
       },
       "required": [
@@ -188,7 +203,46 @@
         "lobbyId",
         "ownerSub",
         "members",
-        "payload"
+        "payload",
+        "seed"
+      ],
+      "type": "object"
+    },
+    "state_for_viewer": {
+      "additionalProperties": false,
+      "properties": {
+        "appId": {
+          "type": "string"
+        },
+        "gameId": {
+          "type": "string"
+        },
+        "row": {
+          "additionalProperties": true,
+          "type": "object"
+        },
+        "state": {
+          "description": "Any JSON value accepted by the game runtime.",
+          "type": [
+            "object",
+            "array",
+            "string",
+            "number",
+            "integer",
+            "boolean",
+            "null"
+          ]
+        },
+        "viewerSub": {
+          "type": "string"
+        }
+      },
+      "required": [
+        "appId",
+        "gameId",
+        "viewerSub",
+        "state",
+        "row"
       ],
       "type": "object"
     },
@@ -198,7 +252,15 @@
         "appId": {
           "type": "string"
         },
+        "callerSub": {
+          "type": "string"
+        },
         "gameId": {
+          "type": "string"
+        },
+        "seed": {
+          "description": "Fresh host randomness for this call: 64 bits as 16 lowercase hex characters.",
+          "pattern": "^[0-9a-f]{16}$",
           "type": "string"
         },
         "state": {
@@ -217,7 +279,9 @@
       "required": [
         "appId",
         "gameId",
-        "state"
+        "state",
+        "callerSub",
+        "seed"
       ],
       "type": "object"
     },
@@ -267,6 +331,9 @@
         "appId": {
           "type": "string"
         },
+        "callerSub": {
+          "type": "string"
+        },
         "gameId": {
           "type": "string"
         },
@@ -299,7 +366,8 @@
         "appId",
         "gameId",
         "priorState",
-        "state"
+        "state",
+        "callerSub"
       ],
       "type": "object"
     }
@@ -310,6 +378,7 @@
     "process_update",
     "validate_lobby_create",
     "state_for_lobby_start",
+    "state_for_viewer",
     "process_signal",
     "migration_stepper"
   ],

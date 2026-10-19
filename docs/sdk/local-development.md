@@ -36,7 +36,7 @@ Inside the container:
    user pool that match production.
 3. The mounted `/app/local-wasm/` is scanned. Each
    `<appId>/{runtime,migration}.wasm` is sha256'd, uploaded to the
-   in-container S3 under the production content-addressed key, and
+   in-container S3 under the production flat key (`<appId>/<kind>.wasm`), and
    registered in `app-registry.<appId>`.
 4. The host binds on port 3000 inside the container (mapped to your
    machine's `:3000` by `-p 3000:3000`).
@@ -90,12 +90,14 @@ The image accepts two env vars game devs typically care about:
   -e LOCAL_BACKEND_PORT=3010 -p 3010:3010
   ```
 
-- `AUTH_ALLOWED_ORIGINS` (default `localhost:*`, `127.0.0.1:*`) —
-  comma-separated CORS origin allowlist. Override when your frontend
-  is on a Cloudflare Pages preview URL or a different host:
+- `AUTH_ALLOWED_ORIGINS` (default `localhost:*`, `127.0.0.1:*`,
+  `https://*.mijnspel.com`) — comma-separated CORS origin allowlist.
+  Override when your frontend is on a Cloudflare Pages preview URL or a
+  different host. Deployed stages also allow `https://*.mijnspel.com`
+  (published games); a scheme prefix on a wildcard pins the scheme:
 
   ```
-  -e AUTH_ALLOWED_ORIGINS=https://*.pages.dev,http://localhost:*
+  -e AUTH_ALLOWED_ORIGINS=https://*.pages.dev,http://localhost:*,https://*.mijnspel.com
   ```
 
 ## What's *different* from production

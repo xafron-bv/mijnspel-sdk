@@ -65,9 +65,12 @@ If you rebuild but the container keeps serving old behavior:
   send `SIGHUP` to the container or restart it. The bootstrap is
   idempotent — restarts are cheap.
 
-In production, every intake produces a fresh `<sha>.wasm` key by
-content-addressing. The registry flip happens unconditionally when
-the script runs to completion.
+In production, every intake overwrites the flat `<appId>/<kind>.wasm`
+key in place (no per-sha object is kept). The registry flip happens
+unconditionally when the script runs to completion, recording the new
+sha as the integrity expectation; the object itself is a plain
+overwrite at the fixed key, so there is no S3-level rollback by prior
+sha — recover a bad upload by re-uploading the known-good artifacts.
 
 ## A row appears at the wrong schema version after a rollback
 

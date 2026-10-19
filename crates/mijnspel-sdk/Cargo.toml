@@ -1,6 +1,6 @@
 [package]
 name = "mijnspel-sdk"
-version = "0.2.0"
+version = "0.3.0"
 edition = "2021"
 description = "Mijnspel backend SDK consumed by per-game WASM modules and by the host loader."
 license = "MIT"
