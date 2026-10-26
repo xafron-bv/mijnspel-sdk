@@ -1,6 +1,6 @@
 [package]
 name = "mijnspel-sdk"
-version = "0.3.0"
+version = "0.3.1"
 edition = "2021"
 description = "Mijnspel backend SDK consumed by per-game WASM modules and by the host loader."
 license = "MIT"
@@ -28,7 +28,7 @@ serde_json = "1"
 sha2 = "0.10"
 hex = "0.4"
 
-wasmtime = { version = "24", optional = true, default-features = false, features = ["runtime", "cranelift", "cache", "gc"] }
+wasmtime = { version = "36", optional = true, default-features = false, features = ["std", "runtime", "cranelift", "cache", "gc", "gc-drc"] }
 tokio = { version = "1", optional = true, features = ["sync", "fs"] }
 aws-config = { version = "1", optional = true }
 aws-sdk-s3 = { version = "1", optional = true }

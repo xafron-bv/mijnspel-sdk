@@ -77,9 +77,10 @@ other origin, including `Origin: null` from a sandboxed iframe, gets
 `403` before the handler runs. If you see CORS errors or `403` in the
 browser console, that's the variable to fix at the orchestrator level.
 
-On deployed stages, published games served from `https://*.mijnspel.com`
-are CORS-allowed by default (in addition to the official frontend). The
-scheme is pinned, so only `https://<slug>.mijnspel.com` is allowed.
+On deployed stages, published games served from `https://*.mijnspel.games`
+are CORS-allowed by default (in addition to the official frontend), as are
+older addresses on `https://*.mijnspel.com` while they redirect. The scheme
+is pinned, so only `https://<slug>.mijnspel.games` is allowed, not `http://`.
 
 ## REST surface (highlights)
 

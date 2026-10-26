@@ -322,31 +322,6 @@
         "title": "UsersChangePasswordRequest",
         "type": "object"
       },
-      "users-create": {
-        "$schema": "http://json-schema.org/draft-04/schema#",
-        "properties": {
-          "email": {
-            "type": [
-              "string",
-              "null"
-            ]
-          },
-          "nickname": {
-            "type": [
-              "string",
-              "null"
-            ]
-          },
-          "username": {
-            "type": [
-              "string",
-              "null"
-            ]
-          }
-        },
-        "title": "UsersCreateRequest",
-        "type": "object"
-      },
       "users-update": {
         "$schema": "http://json-schema.org/draft-04/schema#",
         "anyOf": [
@@ -1705,45 +1680,6 @@
             }
           }
         ],
-        "responses": {
-          "200": {
-            "description": "Success"
-          },
-          "400": {
-            "description": "Bad request"
-          },
-          "401": {
-            "description": "Unauthorized"
-          },
-          "500": {
-            "description": "Internal server error"
-          }
-        }
-      }
-    },
-    "/users": {
-      "post": {
-        "operationId": "post_users",
-        "parameters": [
-          {
-            "in": "query",
-            "name": "appId",
-            "required": true,
-            "schema": {
-              "type": "string"
-            }
-          }
-        ],
-        "requestBody": {
-          "content": {
-            "application/json": {
-              "schema": {
-                "$ref": "#/components/schemas/users-create"
-              }
-            }
-          },
-          "required": true
-        },
         "responses": {
           "200": {
             "description": "Success"

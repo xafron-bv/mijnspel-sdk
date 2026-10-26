@@ -42,7 +42,7 @@ edition = "2021"
 crate-type = ["cdylib"]
 
 [dependencies]
-mijnspel-sdk = { git = "https://github.com/xafron-bv/mijnspel-sdk", tag = "v0.3.0" }
+mijnspel-sdk = { git = "https://github.com/xafron-bv/mijnspel-sdk", tag = "v0.3.1" }
 serde = { version = "1", features = ["derive"] }
 serde_json = "1"
 ```

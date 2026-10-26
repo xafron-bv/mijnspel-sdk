@@ -64,17 +64,18 @@ Or just stop and re-run the container.
 
 ## Authentication
 
-The bootstrap seeds a `_test_admin` Cognito user and a generic test
-user. Sign your frontend in via:
+The bootstrap seeds no users. Create one with the standard
+`/auth/signup` endpoint (MiniStack auto-confirms), or sign in as a guest
+with `/auth/guest`, then sign your frontend in via:
 
 ```
 POST /auth/login?appId=<your-app-id>
-{ "username": "_test_admin", "password": "..." }
+{ "username": "<username>", "password": "<password>" }
 ```
 
-(See the local backend's bootstrap output for the exact seeded
-credentials, or seed your own with the standard `/auth/signup`
-endpoint — MiniStack auto-confirms.)
+The local backend checks tokens the way production does: a route with a
+Cognito authorizer, and every WebSocket upgrade, refuses a token the
+local user pool did not sign or that has expired.
 
 WS upgrades work the same way as production: pass the ID token as a
 `Bearer` header on the upgrade.
@@ -91,13 +92,13 @@ The image accepts two env vars game devs typically care about:
   ```
 
 - `AUTH_ALLOWED_ORIGINS` (default `localhost:*`, `127.0.0.1:*`,
-  `https://*.mijnspel.com`) — comma-separated CORS origin allowlist.
-  Override when your frontend is on a Cloudflare Pages preview URL or a
-  different host. Deployed stages also allow `https://*.mijnspel.com`
-  (published games); a scheme prefix on a wildcard pins the scheme:
+  `https://*.mijnspel.games`, `https://*.mijnspel.com`) — comma-separated
+  CORS origin allowlist. Override when your frontend is on a Cloudflare
+  Pages preview URL or a different host. Deployed stages also allow the
+  published-game origins; a scheme prefix on a wildcard pins the scheme:
 
   ```
-  -e AUTH_ALLOWED_ORIGINS=https://*.pages.dev,http://localhost:*,https://*.mijnspel.com
+  -e AUTH_ALLOWED_ORIGINS=https://*.pages.dev,http://localhost:*,https://*.mijnspel.games
   ```
 
 ## What's *different* from production
@@ -109,17 +110,16 @@ identical:
 - The `app-registry` lives inside the container and disappears when
   the container stops. Production registration is the manual intake
   protocol.
-- The local Cognito emulator's JWKS URL and `iss` claim differ from
-  real AWS Cognito; the host honors `COGNITO_JWKS_URL_OVERRIDE` and
-  `COGNITO_ISSUER_OVERRIDE` env vars to bridge that gap. The image
-  sets them automatically.
+- The local Cognito emulator's JWKS URL differs from real AWS
+  Cognito; the host honors the `COGNITO_JWKS_URL_OVERRIDE` env var to
+  bridge that gap. The image sets it automatically.
 - The emulator does not enforce API Gateway authorizers — irrelevant
   here because the in-container API Gateway simulator enforces them
   itself.
 
 These differences only matter if your game directly probes Cognito's
-JWKS endpoint or inspects JWT `iss` claims. If you're using a
-standard OAuth/OIDC client, you won't notice them.
+JWKS endpoint. If you're using a standard OAuth/OIDC client, you won't
+notice them.
 
 ## Talking to MiniStack directly (rare)
 
